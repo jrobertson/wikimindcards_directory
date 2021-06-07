@@ -1,0 +1,1 @@
+# wikimindcards_directory
