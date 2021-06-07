@@ -12,7 +12,9 @@ require 'martile'
 
 class WikiMindCardsDirectory
   
-  def initialize(dir: '.')
+  def initialize(dir: '.', debug: false)
+    
+    @dir, @debug = dir, debug
     
     # open the file if it exists
     mindwords_file = File.join(dir, 'mindwords.txt')
@@ -22,45 +24,51 @@ class WikiMindCardsDirectory
       @mw = MindWords.new(mindwords_file)
       
       # create the activeoutline document if it doesn't already exist
-      outline_file = File.join(dir, 'outline.txt')
+      outline_txt = File.join(dir, 'outline.txt')
+      @outline_xml = File.join(dir, 'outline.xml')
       
-      if not File.exists? outline_file then
+      if not File.exists? outline_txt then
         
         s = "<?polyrex-links?>\n\n" + @mw.to_outline
-        File.write outline_file, s        
+        File.write outline_txt, s        
         
       end
       
-      @pl = PolyrexLinks.new(outline_file)      
+      @pl = PolyrexLinks.new(outline_txt)      
       
     end
     
   end
   
-  def edit(type=:mindwords)
+  def edit(type=:mindwords, title=nil)
     
     case type
     when :link
-      linkedit()      
+      linkedit(title)
     when :mindwords
       mindwords_edit()
     when :tree  
       tree_edit()
-    when :index
-      indexview()
     when :card
-      cardedit()      
+      cardedit(title)
     end
     
   end  
   
-  # options: :mindwords, :tree, :link, :card
-  #
-  def update(type=:mindwords)
+  def update(type, title, s)
+    
+    case type
+    when :link
+      linkupdate(title, s)
+    when :card
+      cardupdate(title, s)
+    end
     
   end
-  
-  def view(type=:mindwords)
+
+  # options: :mindwords, :tree, :link, :card
+  #  
+  def view(type=:mindwords, title=nil)
     
     case type
     when :mindwords
@@ -72,7 +80,7 @@ class WikiMindCardsDirectory
     when :index
       indexview()
     when :card
-      cardview()
+      cardview(title)
     end
     
   end
@@ -89,24 +97,54 @@ class WikiMindCardsDirectory
     kvx = if File.exists? filepath then
       Kvx.new(filepath)
     else
-      Kvx.new({summary: {title: params['title']}, body: {md: '', url: ''}}, \
+      Kvx.new({summary: {title: rawtitle}, body: {md: '', url: ''}}, \
               debug: false)
     end
     
     %Q(<form action="cardupdate" method="post">
-      <input type='hidden' name='title' value="#{params['title']}"/>
+      <input type='hidden' name='title' value="#{rawtitle}"/>
       <textarea name="kvxtext" cols="73" rows="17">#{kvx.to_s}</textarea>
       <input type="submit" value="apply"/>
     </form>
     )
   end    
   
+  def cardupdate(rawtitle, rawkvxtext)
+    
+    title = rawtitle.downcase.gsub(/ +/,'-')
+    kvx = Kvx.new rawkvxtext.gsub(/\r/,'')
+
+    file = title + '.txt'
+    filepath = File.join(@dir, file)
+        
+    kvx.save filepath
+        
+    found = @pl.find_all_by_link_title rawtitle
+    
+    found.each do |link|
+    
+      url = if kvx.body[:url].length > 1 then
+        kvx.body[:url]
+      else
+        '/do/activeoutline/viewcard?title=' + rawtitle
+      end
+      
+      link.url = url
+      
+    end
+    
+    @pl.save @outline_xml
+
+  end
+  
   def cardview(rawtitle)
     
+    puts 'rawtitle: ' + rawtitle.inspect if @debug
     title = rawtitle.downcase.gsub(/ +/,'-')
     
     file = title + '.txt'
     filepath = File.join(@dir, file)
+    puts 'filepath: ' + filepath.inspect if @debug
     
     kvx = if File.exists? filepath then
       Kvx.new(filepath)
@@ -114,6 +152,8 @@ class WikiMindCardsDirectory
       Kvx.new({summary: {title: rawtitle}, body: {md: '', url: ''}}, \
               debug: false)
     end
+    
+    puts 'kvx: ' + kvx.inspect if @debug
     
     html = if kvx.body[:md].is_a? Hash then
       Kramdown::Document.new(Martile.new(kvx.body[:md][:description].to_s)\
@@ -142,6 +182,16 @@ class WikiMindCardsDirectory
     </form>
     "
     
+  end
+  
+  def linkupdate(rawtitle, rawurl)
+    
+    r = @pl.find_by_link_title rawtitle
+    return unless r
+    
+    r.url = rawurl
+    @pl.save @outline_xml
+
   end
   
   def indexview()
@@ -221,4 +271,3 @@ ul li {background-color: transparent; margin: 0.1em 0.1em; padding: 0.3em 0.3em}
   end
   
 end
-
