@@ -9,6 +9,7 @@ require 'mindwords'
 require 'polyrex-links'
 require 'jstreebuilder'
 require 'martile'
+require 'onedrb'
 
 class WikiMindCardsDirectory
   
