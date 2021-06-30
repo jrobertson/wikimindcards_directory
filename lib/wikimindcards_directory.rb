@@ -14,7 +14,8 @@ class WikiMindCardsDirectory
   
   def initialize(dir: '.', debug: false)
     
-    @dir, @debug = dir, debug
+    @dir = File.expand_path(dir)
+    @debug = debug
     
     # open the file if it exists
     mindwords_file = File.join(dir, 'mindwords.txt')
@@ -47,21 +48,42 @@ class WikiMindCardsDirectory
       linkedit(title)
     when :mindwords
       mindwords_edit()
+    when :outline  
+      outlinefile_edit()      
     when :tree  
       tree_edit()
     when :card
       cardedit(title)
     end
     
-  end  
+  end
+
+  def import_mindwords(s)
+    
+    @mw = MindWords.new(s)
+    mindwords_file = File.join(@dir, 'mindwords.txt')
+    @mw.save mindwords_file
+    
+    s2 = "<?polyrex-links?>\n\n" + @mw.to_outline
+    outline_txt = File.join(@dir, 'outline.txt')
+    
+    @pl = PolyrexLinks.new(s2)
+    @pl.save outline_txt
+
+    
+  end
   
-  def update(type, title, s)
+  def update(type, title=nil, s)
     
     case type
+    when :mindwords
+      mindwords_update(s)      
     when :link
       linkupdate(title, s)
     when :card
       cardupdate(title, s)
+    when :outline
+      outlinefile_update(s)      
     end
     
   end
@@ -190,6 +212,8 @@ class WikiMindCardsDirectory
     return unless r
     
     r.url = rawurl
+    
+    @outline_xml = File.join(@dir, 'outline.xml') unless @outline_xml
     @pl.save @outline_xml
 
   end
@@ -231,11 +255,38 @@ class WikiMindCardsDirectory
     
   end
   
+  def mindwords_update(s)
+    
+    @mw = MindWords.new(s)
+    
+    pl = @pl.migrate @mw.to_outline
+    pl.save @outline_xml    
+    @pl = pl
+    
+  end      
+  
+  def outlinefile_edit()
+    
+    %Q(<form action="fileupdate" method="post">
+      <textarea name="treelinks" cols="73" rows="17">#{@pl.to_s}</textarea>
+      <input type="submit" value="apply"/>
+    </form>
+    )
+    
+  end  
+  
+  def outlinefile_update(s)
+    
+    @pl = PolyrexLinks.new
+    @pl.import s
+    
+  end    
+  
   def tree_edit()
         
     base_url = 'linkedit?title='
     @pl.each_recursive { |x| x.url =  base_url + x.title }            
-    jtb = JsTreeBuilder.new({src: links, type: :plain, debug: true})
+    jtb = JsTreeBuilder.new({src: @pl, type: :plain, debug: true})
         
     style = "
 <style>
@@ -270,4 +321,26 @@ ul li {background-color: transparent; margin: 0.1em 0.1em; padding: 0.3em 0.3em}
     
   end
   
+end
+
+
+module Wmcd
+
+  class Server < OneDrb::Server
+
+    def initialize(host: '127.0.0.1', port: '21200', dir: '.')
+
+      super(host: host, port: port, obj: WikiMindCardsDirectory.new(dir: dir))
+
+    end
+
+  end
+
+  class Client < OneDrb::Client
+
+    def initialize(host: '127.0.0.1', port: '21200')
+      super(host: host, port: port)
+    end
+  end
+
 end
