@@ -68,10 +68,10 @@ KVX_XSL =<<EOF
 EOF
 
 class WikiMindCardsDirectory
-  include RXFHelperModule
+  include RXFReadWriteModule
 
   class MindWordsX < MindWords
-    include RXFHelperModule
+    include RXFReadWriteModule
 
     def initialize(dir, s='')
 
@@ -104,7 +104,7 @@ class WikiMindCardsDirectory
   end
 
   class PxLinks < PolyrexLinks
-    include RXFHelperModule
+    include RXFReadWriteModule
 
     def initialize(dir, raws)
 
@@ -257,7 +257,7 @@ ul li {background-color: transparent; margin: 0.1em 0.1em; padding: 0.3em 0.3em}
   #
   def initialize(dir: '.', dxpath: nil, debug: false)
 
-    @dir = File.expand_path(dir)
+    @dir = dir
     @dxpath = dxpath
     @debug = debug
 
